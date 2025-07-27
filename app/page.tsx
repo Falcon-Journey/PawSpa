@@ -15,14 +15,34 @@ export default function HomePage() {
   const [loginEmail, setLoginEmail] = useState("")
   const [loginPassword, setLoginPassword] = useState("")
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Mock login - in real app, validate credentials
-    if (loginEmail && loginPassword) {
-      window.location.href = "/dashboard"
-    }
-  }
+const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
 
+  if (!loginEmail || !loginPassword) return;
+
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || "Login failed");
+      return;
+    }
+    
+    localStorage.setItem("userId", JSON.stringify(data.userId))
+
+    // Redirect on successful login
+    window.location.href = "/dashboard";
+  } catch (err) {
+    console.error("Login error:", err);
+    alert("An unexpected error occurred");
+  }
+};
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="container mx-auto px-4 py-8">

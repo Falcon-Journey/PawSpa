@@ -1,15 +1,70 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Calendar, Clock, Dog, Heart, Phone, Plus, Settings, Star, User } from "lucide-react"
+import { Clock, Dog, Heart, Phone, Plus, Settings, Star, User, CalendarIcon } from "lucide-react"
 import Link from "next/link"
+import { Calendar } from "@/components/ui/calendar"
+
+
+interface Booking {
+  id: string;
+  dog: string;
+  service: string;
+  date: string;
+  time: string;
+  price: number;
+}
+
+type GroomingEntry = {
+  id: string;
+  created_at: string;
+  rating: number;
+  notes: string;
+  photos: string[];
+  dogs?: {
+    name: string;
+  };
+  bookings?:
+  {
+    booking_date: string;
+    ritual_type: string;
+  };
+};
+
+
 
 export default function DashboardPage() {
   const [selectedDog, setSelectedDog] = useState("buddy")
+  const [upcomingAppointments, setUpcomingAppointments] = useState<Booking[]>([]);
+  const [groomingHistory, setGroomingHistory] = useState<GroomingEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null)
+  const [newDate, setNewDate] = useState<Date | undefined>(new Date())
+
+  const handleRescheduleClick = (id: string) => {
+    setReschedulingId(id === reschedulingId ? null : id)
+    setNewDate(undefined)
+  }
+
+  const handleConfirm = async (id: string) => {
+    if (!newDate) return
+    await fetch("/api/bookings/reschedule-booking", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bookingId: id,
+        newBookingDate: newDate.toISOString().split("T")[0],
+      }),
+    })
+    setReschedulingId(null)
+    // Optionally refresh appointments list here
+  }
+
+
 
   const dogs = [
     {
@@ -25,39 +80,76 @@ export default function DashboardPage() {
     },
   ]
 
-  const upcomingAppointments = [
-    {
-      id: "1",
-      dog: "Buddy",
-      service: "Full Grooming",
-      date: "2024-01-28",
-      time: "10:00 AM",
-      price: 95,
-    },
-  ]
+useEffect(() => {
+  const fetchBookings = async () => {
+    const userId = localStorage.getItem("userId");
 
-  const groomingHistory = [
-    {
-      id: "1",
-      date: "2024-01-15",
-      service: "Bath & Retouch",
-      groomer: "Sarah",
-      style: "Summer Cut",
-      rating: 5,
-      photos: ["/placeholder.svg?height=150&width=150"],
-      notes: "Buddy was very well-behaved. Loved the summer cut style!",
-    },
-    {
-      id: "2",
-      date: "2023-12-10",
-      service: "Full Grooming",
-      groomer: "Mike",
-      style: "Breed Standard",
-      rating: 5,
-      photos: ["/placeholder.svg?height=150&width=150"],
-      notes: "Beautiful breed standard cut. Customer very happy.",
-    },
-  ]
+    if (!userId) {
+      console.log("No userId found in localStorage.");
+      return;
+    }
+
+    try {
+      console.log("Fetching bookings for userId:", userId);
+      const res = await fetch(`/api/bookings/get-bookings?user_id=${userId}`);
+      const data = await res.json();
+      console.log("Raw API response:", data);
+
+      if (res.ok && data.length > 0) {
+      const bookings = data.map((booking: any) => ({
+          id: booking.id,
+          dog: booking.dog || "Unknown",
+          service: booking.service || "N/A",
+          date: booking.date,
+          time: booking.time,
+          price: booking.price,
+        }));
+
+        console.log("Mapped bookings:", bookings);
+        setUpcomingAppointments(bookings);
+      } else {
+        console.log("No bookings found or bad response.");
+        setUpcomingAppointments([]); // clear old state just in case
+      }
+    } catch (error) {
+      console.error("Error fetching bookings:", error);
+    }
+  };
+
+  fetchBookings();
+}, []);
+
+
+  useEffect(() => {
+    const fetchGroomingHistory = async () => {
+      const userId = localStorage.getItem("userId");
+      if (!userId) {
+        console.log("No userId found in localStorage.");
+        return;
+      }
+      try {
+        const res = await fetch("/api/grooming-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        });
+
+        const result = await res.json();
+
+        if (res.ok && result.grooming_feedback) {
+          setGroomingHistory(result.grooming_feedback);
+        } else {
+          console.error("API error:", result.error || result.details);
+        }
+      } catch (err) {
+        console.error("Fetch error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+     fetchGroomingHistory();
+  }, []);
 
   const currentDog = dogs.find((dog) => dog.id === selectedDog) || dogs[0]
 
@@ -98,31 +190,66 @@ export default function DashboardPage() {
                   {upcomingAppointments.length > 0 ? (
                     <div className="space-y-4">
                       {upcomingAppointments.map((appointment) => (
-                        <div key={appointment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center gap-4">
-                            <div className="p-2 bg-blue-100 rounded-lg">
-                              <Calendar className="h-5 w-5 text-blue-600" />
+                        <div
+                          key={appointment.id}
+                          className="flex flex-col gap-2 p-4 border rounded-lg"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="p-2 bg-blue-100 rounded-lg">
+                                <CalendarIcon className="h-5 w-5 text-blue-600" />
+                              </div>
+                              <div>
+                                <div className="font-semibold">
+                                  {appointment.service} - {appointment.dog}
+                                </div>
+                                <div className="text-sm text-gray-600 flex items-center gap-4">
+                                  <span>{appointment.date}</span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="h-4 w-4" />
+                                    {appointment.time}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                            <div>
-                              <div className="font-semibold">
-                                {appointment.service} - {appointment.dog}
-                              </div>
-                              <div className="text-sm text-gray-600 flex items-center gap-4">
-                                <span>{appointment.date}</span>
-                                <span className="flex items-center gap-1">
-                                  <Clock className="h-4 w-4" />
-                                  {appointment.time}
-                                </span>
-                              </div>
+                            <div className="text-right space-y-2">
+                              <div className="font-semibold">${appointment.price}</div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleRescheduleClick(appointment.id)}
+                              >
+                                <Phone className="h-4 w-4 mr-1" />
+                                Reschedule
+                              </Button>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="font-semibold">${appointment.price}</div>
-                            <Button variant="outline" size="sm">
-                              <Phone className="h-4 w-4 mr-1" />
-                              Reschedule
-                            </Button>
-                          </div>
+
+                          {reschedulingId === appointment.id && (
+                            <div className="mt-2 p-4 bg-gray-50 rounded-lg border">
+                              <Calendar
+                                mode="single"
+                                selected={newDate}
+                                onSelect={setNewDate}
+                              />
+                              <div className="flex justify-end gap-2 mt-4">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setReschedulingId(null)}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleConfirm(appointment.id)}
+                                  disabled={!newDate}
+                                >
+                                  Confirm
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -177,7 +304,7 @@ export default function DashboardPage() {
                 <CardContent className="space-y-4">
                   <div className="text-center">
                     <Avatar className="h-20 w-20 mx-auto mb-4">
-                      <AvatarImage src="/placeholder.svg?height=80&width=80" />
+                      <AvatarImage src={currentDog.photos[0]} />
                       <AvatarFallback>{currentDog.name[0]}</AvatarFallback>
                     </Avatar>
                     <h3 className="font-semibold">{currentDog.name}</h3>
@@ -218,7 +345,7 @@ export default function DashboardPage() {
                     {groomingHistory.slice(0, 2).map((session) => (
                       <div key={session.id} className="border-b pb-4 last:border-b-0">
                         <div className="flex items-center justify-between mb-2">
-                          <div className="text-sm font-semibold">{session.service}</div>
+                          <div className="text-sm font-semibold">{session.bookings?.ritual_type}</div>
                           <div className="flex items-center gap-1">
                             {[...Array(session.rating)].map((_, i) => (
                               <Star key={i} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
@@ -226,13 +353,13 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <div className="text-xs text-gray-600 mb-2">
-                          {session.date} • {session.groomer} • {session.style}
+                          {session.bookings?.booking_date} • {session.dogs?.name}
                         </div>
                         <div className="flex gap-2 mb-2">
                           {session.photos.map((photo, index) => (
                             <img
                               key={index}
-                              src={photo || "/placeholder.svg"}
+                              src={photo}
                               alt="Grooming result"
                               className="w-12 h-12 rounded object-cover"
                             />
