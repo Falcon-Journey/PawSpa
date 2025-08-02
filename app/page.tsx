@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState , useEffect} from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,6 +14,7 @@ import Link from "next/link"
 export default function HomePage() {
   const [loginEmail, setLoginEmail] = useState("")
   const [loginPassword, setLoginPassword] = useState("")
+
 
 const handleLogin = async (e: React.FormEvent) => {
   e.preventDefault();
@@ -35,6 +36,7 @@ const handleLogin = async (e: React.FormEvent) => {
     }
     
     localStorage.setItem("userId", JSON.stringify(data.userId))
+    localStorage.setItem("userName", JSON.stringify(data.userName));
 
     // Redirect on successful login
     window.location.href = "/dashboard";
@@ -64,7 +66,7 @@ const handleLogin = async (e: React.FormEvent) => {
             <TabsContent value="login">
               <Card>
                 <CardHeader>
-                  <CardTitle>Welcome Back</CardTitle>
+                  <CardTitle>Welcome</CardTitle>
                   <CardDescription>Sign in to book your next grooming appointment</CardDescription>
                 </CardHeader>
                 <CardContent>

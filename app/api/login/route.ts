@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
 
     const { data: user, error } = await supabase
       .from("users")
-      .select("id, email, password")
+      .select("id, email, password , firstname")
       .eq("email", email)
       .single();
 
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid password" }, { status: 401 });
     }
 
-    return NextResponse.json({ message: "Login successful", userId: user.id }, { status: 200 });
+    return NextResponse.json({ message: "Login successful", userId: user.id , userName: user.firstname }, { status: 200 });
   } catch (err: any) {
     return NextResponse.json({ error: "Login failed", details: err.message }, { status: 500 });
   }

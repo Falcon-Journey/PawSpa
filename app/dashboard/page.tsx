@@ -5,45 +5,71 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Clock, Dog, Heart, Phone, Plus, Settings, Star, User, CalendarIcon } from "lucide-react"
+import {
+  Clock,
+  Dog,
+  Heart,
+  Phone,
+  Plus,
+  Settings,
+  Star,
+  User,
+  CalendarIcon,
+} from "lucide-react"
 import Link from "next/link"
 import { Calendar } from "@/components/ui/calendar"
 
-
 interface Booking {
-  id: string;
-  dog: string;
-  service: string;
-  date: string;
-  time: string;
-  price: number;
+  id: string
+  dog: string
+  service: string
+  date: string
+  time: string
+  price: number
 }
 
 type GroomingEntry = {
-  id: string;
-  created_at: string;
-  rating: number;
-  notes: string;
-  photos: string[];
-  dogs?: {
-    name: string;
-  };
-  bookings?:
-  {
-    booking_date: string;
-    ritual_type: string;
-  };
-};
+  id: string
+  created_at: string
+  rating: number
+  notes: string
+  photos: string[]
+  dogs?: { name: string }
+  bookings?: { booking_date: string; ritual_type: string }
+}
 
+type Dog = {
+  id: string
+  name: string
+  breed: string
+  weight_kg: number
+  date_of_birth: string
+  grooming_behavior: string
+  other_behavior_notes: string
+  // Derived properties:
+  age?: string
+  weight?: string
+  lastGroomed?: string
+  favoriteStyle?: string
+  photos?: string[]
+}
 
+function calculateAge(dob: string) {
+  const birth = new Date(dob)
+  const ageDifMs = Date.now() - birth.getTime()
+  const ageDate = new Date(ageDifMs)
+  return `${Math.abs(ageDate.getUTCFullYear() - 1970)} years`
+}
 
 export default function DashboardPage() {
-  const [selectedDog, setSelectedDog] = useState("buddy")
-  const [upcomingAppointments, setUpcomingAppointments] = useState<Booking[]>([]);
-  const [groomingHistory, setGroomingHistory] = useState<GroomingEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [selectedDog, setSelectedDog] = useState<string>("")
+  const [dogs, setDogs] = useState<Dog[]>([])
+  const [upcomingAppointments, setUpcomingAppointments] = useState<Booking[]>([])
+  const [groomingHistory, setGroomingHistory] = useState<GroomingEntry[]>([])
+  const [loading, setLoading] = useState(true)
   const [reschedulingId, setReschedulingId] = useState<string | null>(null)
   const [newDate, setNewDate] = useState<Date | undefined>(new Date())
+  const userName = JSON.parse(localStorage.getItem("userName") || '""');
 
   const handleRescheduleClick = (id: string) => {
     setReschedulingId(id === reschedulingId ? null : id)
@@ -61,97 +87,101 @@ export default function DashboardPage() {
       }),
     })
     setReschedulingId(null)
-    // Optionally refresh appointments list here
   }
 
+  useEffect(() => {
+    const fetchDogs = async () => {
+      const userId = JSON.parse(localStorage.getItem("userId") || "null")
+      if (!userId) return
 
+      try {
+        const res = await fetch("/api/get-dogs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        })
 
-  const dogs = [
-    {
-      id: "buddy",
-      name: "Buddy",
-      breed: "Golden Retriever",
-      weight: "65 lbs",
-      age: "4 years",
-      lastGroomed: "2024-01-15",
-      favoriteStyle: "Summer Cut",
-      photos: ["/placeholder.svg?height=100&width=100"],
-      pricing: { bath: 45, retouch: 65, grooming: 95 },
-    },
-  ]
+        const data = await res.json()
 
-useEffect(() => {
-  const fetchBookings = async () => {
-    const userId = localStorage.getItem("userId");
-
-    if (!userId) {
-      console.log("No userId found in localStorage.");
-      return;
-    }
-
-    try {
-      console.log("Fetching bookings for userId:", userId);
-      const res = await fetch(`/api/bookings/get-bookings?user_id=${userId}`);
-      const data = await res.json();
-      console.log("Raw API response:", data);
-
-      if (res.ok && data.length > 0) {
-      const bookings = data.map((booking: any) => ({
-          id: booking.id,
-          dog: booking.dog || "Unknown",
-          service: booking.service || "N/A",
-          date: booking.date,
-          time: booking.time,
-          price: booking.price,
-        }));
-
-        console.log("Mapped bookings:", bookings);
-        setUpcomingAppointments(bookings);
-      } else {
-        console.log("No bookings found or bad response.");
-        setUpcomingAppointments([]); // clear old state just in case
+        if (res.ok && data.dogs) {
+          const enhancedDogs = data.dogs.map((dog: Dog) => ({
+            ...dog,
+            age: calculateAge(dog.date_of_birth),
+            weight: `${dog.weight_kg} kg`,
+            lastGroomed: "2024-01-15", // placeholder or derive from grooming history
+            favoriteStyle: "Summer Cut", // optional
+            photos: ["/placeholder.svg"],
+          }))
+          setDogs(enhancedDogs)
+          if (enhancedDogs.length > 0) setSelectedDog(enhancedDogs[0].id)
+        }
+      } catch (err) {
+        console.error("Fetch error:", err)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error("Error fetching bookings:", error);
     }
-  };
 
-  fetchBookings();
-}, []);
+    fetchDogs()
+  }, [])
 
+  useEffect(() => {
+    const fetchBookings = async () => {
+      const userId = localStorage.getItem("userId")
+      if (!userId) return
+
+      try {
+        const res = await fetch(`/api/bookings/get-bookings?user_id=${userId}`)
+        const data = await res.json()
+
+        if (res.ok && data.length > 0) {
+          const bookings = data.map((booking: any) => ({
+            id: booking.id,
+            dog: booking.dog || "Unknown",
+            service: booking.service || "N/A",
+            date: booking.date,
+            time: booking.time,
+            price: booking.price,
+          }))
+          setUpcomingAppointments(bookings)
+        } else {
+          setUpcomingAppointments([])
+        }
+      } catch (error) {
+        console.error("Error fetching bookings:", error)
+      }
+    }
+
+    fetchBookings()
+  }, [])
 
   useEffect(() => {
     const fetchGroomingHistory = async () => {
-      const userId = localStorage.getItem("userId");
-      if (!userId) {
-        console.log("No userId found in localStorage.");
-        return;
-      }
+      const userId = localStorage.getItem("userId")
+      if (!userId) return
+
       try {
         const res = await fetch("/api/grooming-history", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }),
-        });
+        })
 
-        const result = await res.json();
-
+        const result = await res.json()
         if (res.ok && result.grooming_feedback) {
-          setGroomingHistory(result.grooming_feedback);
-        } else {
-          console.error("API error:", result.error || result.details);
+          setGroomingHistory(result.grooming_feedback)
         }
       } catch (err) {
-        console.error("Fetch error:", err);
-      } finally {
-        setLoading(false);
+        console.error("Fetch error:", err)
       }
-    };
+    }
 
-     fetchGroomingHistory();
-  }, []);
+    fetchGroomingHistory()
+  }, [])
 
   const currentDog = dogs.find((dog) => dog.id === selectedDog) || dogs[0]
+
+  if (loading || !currentDog) return <div className="p-10 text-center">Loading dashboard...</div>
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -159,7 +189,7 @@ useEffect(() => {
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold">Welcome back</h1>
+              <h1 className="text-2xl font-bold">Welcome{userName ? `, ${userName}` : ""}</h1>
               <p className="text-gray-600">Manage your appointments and dog profiles</p>
             </div>
             <div className="flex gap-2">
@@ -174,6 +204,7 @@ useEffect(() => {
 
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
+              {/* Upcoming Appointments */}
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -190,10 +221,7 @@ useEffect(() => {
                   {upcomingAppointments.length > 0 ? (
                     <div className="space-y-4">
                       {upcomingAppointments.map((appointment) => (
-                        <div
-                          key={appointment.id}
-                          className="flex flex-col gap-2 p-4 border rounded-lg"
-                        >
+                        <div key={appointment.id} className="flex flex-col gap-2 p-4 border rounded-lg">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                               <div className="p-2 bg-blue-100 rounded-lg">
@@ -227,24 +255,12 @@ useEffect(() => {
 
                           {reschedulingId === appointment.id && (
                             <div className="mt-2 p-4 bg-gray-50 rounded-lg border">
-                              <Calendar
-                                mode="single"
-                                selected={newDate}
-                                onSelect={setNewDate}
-                              />
+                              <Calendar mode="single" selected={newDate} onSelect={setNewDate} />
                               <div className="flex justify-end gap-2 mt-4">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setReschedulingId(null)}
-                                >
+                                <Button variant="ghost" size="sm" onClick={() => setReschedulingId(null)}>
                                   Cancel
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleConfirm(appointment.id)}
-                                  disabled={!newDate}
-                                >
+                                <Button size="sm" onClick={() => handleConfirm(appointment.id)} disabled={!newDate}>
                                   Confirm
                                 </Button>
                               </div>
@@ -261,6 +277,7 @@ useEffect(() => {
                 </CardContent>
               </Card>
 
+              {/* Quick Book Services */}
               <Card>
                 <CardHeader>
                   <CardTitle>Quick Book Services</CardTitle>
@@ -268,30 +285,25 @@ useEffect(() => {
                 </CardHeader>
                 <CardContent>
                   <div className="grid md:grid-cols-3 gap-4">
-                    <div className="p-4 border rounded-lg text-center">
-                      <div className="text-2xl font-bold text-blue-600">${currentDog.pricing.bath}</div>
-                      <div className="font-semibold">Bath Service</div>
-                      <Button className="w-full mt-2 bg-transparent" variant="outline">
-                        Book Now
-                      </Button>
-                    </div>
-                    <div className="p-4 border rounded-lg text-center">
-                      <div className="text-2xl font-bold text-blue-600">${currentDog.pricing.retouch}</div>
-                      <div className="font-semibold">Bath & Retouch</div>
-                      <Button className="w-full mt-2 bg-transparent" variant="outline">
-                        Book Now
-                      </Button>
-                    </div>
-                    <div className="p-4 border rounded-lg text-center">
-                      <div className="text-2xl font-bold text-blue-600">${currentDog.pricing.grooming}</div>
-                      <div className="font-semibold">Full Grooming</div>
-                      <Button className="w-full mt-2">Book Now</Button>
-                    </div>
+                    {[
+                      { name: "Bath Service", price: 40 },
+                      { name: "Bath & Retouch", price: 65 },
+                      { name: "Full Grooming", price: 90 },
+                    ].map((service) => (
+                      <div key={service.name} className="p-4 border rounded-lg text-center">
+                        <div className="text-2xl font-bold text-blue-600">${service.price}</div>
+                        <div className="font-semibold">{service.name}</div>
+                        <Button className="w-full mt-2 bg-transparent" variant="outline">
+                          Book Now
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
             </div>
 
+            {/* Dog Profile + Grooming History */}
             <div className="space-y-6">
               <Card>
                 <CardHeader>
@@ -303,7 +315,7 @@ useEffect(() => {
                 <CardContent className="space-y-4">
                   <div className="text-center">
                     <Avatar className="h-20 w-20 mx-auto mb-4">
-                      <AvatarImage src={currentDog.photos[0]} />
+                      <AvatarImage src={currentDog.photos?.[0]} />
                       <AvatarFallback>{currentDog.name[0]}</AvatarFallback>
                     </Avatar>
                     <h3 className="font-semibold">{currentDog.name}</h3>
@@ -311,18 +323,9 @@ useEffect(() => {
                   </div>
 
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Weight:</span>
-                      <span>{currentDog.weight}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Age:</span>
-                      <span>{currentDog.age}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Last Groomed:</span>
-                      <span>{currentDog.lastGroomed}</span>
-                    </div>
+                    <div className="flex justify-between"><span>Weight:</span><span>{currentDog.weight}</span></div>
+                    <div className="flex justify-between"><span>Age:</span><span>{currentDog.age}</span></div>
+                    <div className="flex justify-between"><span>Last Groomed:</span><span>{currentDog.lastGroomed}</span></div>
                   </div>
 
                   <div className="pt-4 border-t">
@@ -336,9 +339,7 @@ useEffect(() => {
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>Grooming History</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle>Grooming History</CardTitle></CardHeader>
                 <CardContent>
                   <div className="space-y-4">
                     {groomingHistory.slice(0, 2).map((session) => (
@@ -356,21 +357,14 @@ useEffect(() => {
                         </div>
                         <div className="flex gap-2 mb-2">
                           {session.photos.map((photo, index) => (
-                            <img
-                              key={index}
-                              src={photo}
-                              alt="Grooming result"
-                              className="w-12 h-12 rounded object-cover"
-                            />
+                            <img key={index} src={photo} alt="Grooming result" className="w-12 h-12 rounded object-cover" />
                           ))}
                         </div>
                         <p className="text-xs text-gray-600">{session.notes}</p>
                       </div>
                     ))}
                   </div>
-                  <Button variant="outline" className="w-full mt-4 bg-transparent">
-                    View All History
-                  </Button>
+                  <Button variant="outline" className="w-full mt-4 bg-transparent">View All History</Button>
                 </CardContent>
               </Card>
             </div>

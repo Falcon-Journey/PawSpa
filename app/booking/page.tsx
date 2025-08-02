@@ -169,8 +169,6 @@ export default function BookingPage() {
       const apiPrice = parseFloat(result.price);
       price += apiPrice;
       adjustments.push(`Breed/Coat/Grooming surcharge: +$${apiPrice}`);
-    } else {
-      adjustments.push("No pricing rule matched. Skipping surcharge.");
     }
   } catch (err) {
     adjustments.push("Failed to fetch pricing rule from server.");
